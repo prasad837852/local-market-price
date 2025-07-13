@@ -4,21 +4,21 @@ from datetime import date
 from preprocess import clean_data
 from model import train_model, predict_price
 
-# Update to point to the new dataset
-DATA_PATH = "dataset/local_prices.csv"  # Replace with the latest if needed
+# Path to your real-time dataset
+DATA_PATH = "dataset/local_prices.csv"
 
-# Streamlit page settings
+# Streamlit app setup
 st.set_page_config(page_title="📈 Local Price Tracker", layout="wide")
 st.title("🌾 Local Market Price Tracker")
 st.markdown("Analyze and forecast produce prices across local markets using min, max, and modal prices.")
 
 try:
-    # ✅ Read CSV safely with correct encoding
-    df = pd.read_csv(DATA_PATH, encoding='utf-8-sig', delimiter=",", on_bad_lines="skip")
+    # Load and clean data
+    df = pd.read_csv(DATA_PATH, encoding='utf-8-sig', on_bad_lines="skip")
     df['arrival_date'] = pd.to_datetime(df['arrival_date'], errors='coerce')
     df = clean_data(df)
 
-    st.success(f"✅ Loaded {len(df)} records from {DATA_PATH}")
+    st.success(f"✅ Loaded {len(df)} records from `{DATA_PATH}`")
 
     # Sidebar filters
     st.sidebar.header("🔍 Filter Options")
@@ -45,22 +45,19 @@ try:
     if commodity != "All":
         filtered = filtered[filtered['commodity'] == commodity]
 
-    # Display filtered results
+    # Display filtered data
     st.subheader("📊 Filtered Market Data")
     st.write(f"Showing {len(filtered)} records")
     st.dataframe(filtered.sort_values(by="arrival_date"), use_container_width=True)
 
     if not filtered.empty:
         st.subheader("📈 Modal Price Trend")
-
-        # Plot modal price trend
         trend = filtered.groupby("arrival_date")["modal_price"].mean().reset_index()
         st.line_chart(trend.set_index("arrival_date"))
 
-        # Optional: min/max range info
-        with st.expander("📌 View Monthly Min/Max Summary"):
-            price_summary = filtered.groupby("arrival_date")[["min_price", "modal_price", "max_price"]].mean().reset_index()
-            st.dataframe(price_summary.set_index("arrival_date"), use_container_width=True)
+        with st.expander("📌 View Daily Min/Max Price Summary"):
+            summary = filtered.groupby("arrival_date")[["min_price", "modal_price", "max_price"]].mean().reset_index()
+            st.dataframe(summary.set_index("arrival_date"), use_container_width=True)
 
         st.subheader("🔮 Predict Future Modal Price")
         model, df_model = train_model(filtered)
@@ -71,7 +68,7 @@ try:
             st.success(f"📅 Predicted modal price on {future_date.strftime('%d-%b-%Y')}: ₹{pred_price:.2f}")
 
     else:
-        st.warning("⚠️ No data matches your filters.")
+        st.warning("⚠️ No data found for selected filters.")
 
 except Exception as e:
-    st.error(f"❌ Error: {e}")
+    st.error(f"❌ Error loading data or processing: {e}")
