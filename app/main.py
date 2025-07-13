@@ -4,71 +4,74 @@ from datetime import date
 from preprocess import clean_data
 from model import train_model, predict_price
 
-# Path to your real-time dataset
+# Path to the dataset
 DATA_PATH = "dataset/local_prices.csv"
 
-# Streamlit app setup
-st.set_page_config(page_title="📈 Local Price Tracker", layout="wide")
+# Streamlit page setup
+st.set_page_config(page_title="📈 Local Market Price Tracker", layout="wide")
 st.title("🌾 Local Market Price Tracker")
 st.markdown("Analyze and forecast produce prices across local markets using min, max, and modal prices.")
 
 try:
-    # Load and clean data
-    df = pd.read_csv(DATA_PATH, encoding='utf-8-sig', on_bad_lines="skip")
-    df['arrival_date'] = pd.to_datetime(df['arrival_date'], errors='coerce')
+    # Load dataset
+    df = pd.read_csv(DATA_PATH, encoding='utf-8-sig', on_bad_lines='skip')
+    df['arrival_date'] = pd.to_datetime(df['arrival_date'], dayfirst=True, errors='coerce')
+    df = df.dropna(subset=['arrival_date', 'min_price', 'modal_price', 'max_price', 'market', 'commodity'])
+
+    # Optional cleaning
     df = clean_data(df)
+
+    # Extract time-based fields
+    df['year'] = df['arrival_date'].dt.year
+    df['month'] = df['arrival_date'].dt.month
+    df['month_name'] = df['arrival_date'].dt.strftime('%B')
 
     st.success(f"✅ Loaded {len(df)} records from `{DATA_PATH}`")
 
-    # Sidebar filters
+    # Sidebar filter options
     st.sidebar.header("🔍 Filter Options")
-    years = sorted(df['arrival_date'].dt.year.dropna().unique())
-    months = sorted(df['arrival_date'].dt.month.dropna().unique())
-    markets = sorted(df['market'].dropna().unique())
-    commodities = sorted(df['commodity'].dropna().unique())
+    selected_year = st.sidebar.selectbox("Year", ["All"] + sorted(df['year'].astype(str).unique().tolist()))
+    selected_month = st.sidebar.selectbox("Month", ["All"] + df['month_name'].unique().tolist())
+    selected_market = st.sidebar.selectbox("Market", ["All"] + sorted(df['market'].unique()))
+    selected_commodity = st.sidebar.selectbox("Commodity", ["All"] + sorted(df['commodity'].unique()))
 
-    year = st.sidebar.selectbox("Year", ["All"] + list(map(str, years)))
-    month_names = ["All"] + [date(1900, m, 1).strftime('%B') for m in months]
-    month = st.sidebar.selectbox("Month", month_names)
-    market = st.sidebar.selectbox("Market", ["All"] + markets)
-    commodity = st.sidebar.selectbox("Commodity", ["All"] + commodities)
+    # Filter data
+    filtered_df = df.copy()
+    if selected_year != "All":
+        filtered_df = filtered_df[filtered_df['year'] == int(selected_year)]
+    if selected_month != "All":
+        filtered_df = filtered_df[filtered_df['month_name'] == selected_month]
+    if selected_market != "All":
+        filtered_df = filtered_df[filtered_df['market'] == selected_market]
+    if selected_commodity != "All":
+        filtered_df = filtered_df[filtered_df['commodity'] == selected_commodity]
 
-    # Apply filters
-    filtered = df.copy()
-    if year != "All":
-        filtered = filtered[filtered['arrival_date'].dt.year == int(year)]
-    if month != "All":
-        month_index = month_names.index(month)
-        filtered = filtered[filtered['arrival_date'].dt.month == month_index]
-    if market != "All":
-        filtered = filtered[filtered['market'] == market]
-    if commodity != "All":
-        filtered = filtered[filtered['commodity'] == commodity]
-
-    # Display filtered data
+    # Show filtered data
     st.subheader("📊 Filtered Market Data")
-    st.write(f"Showing {len(filtered)} records")
-    st.dataframe(filtered.sort_values(by="arrival_date"), use_container_width=True)
+    st.write(f"Showing {len(filtered_df)} records")
+    st.dataframe(filtered_df.sort_values(by='arrival_date'), use_container_width=True)
 
-    if not filtered.empty:
+    if not filtered_df.empty:
+        # Modal price trend
         st.subheader("📈 Modal Price Trend")
-        trend = filtered.groupby("arrival_date")["modal_price"].mean().reset_index()
+        trend = filtered_df.groupby("arrival_date")["modal_price"].mean().reset_index()
         st.line_chart(trend.set_index("arrival_date"))
 
-        with st.expander("📌 View Daily Min/Max Price Summary"):
-            summary = filtered.groupby("arrival_date")[["min_price", "modal_price", "max_price"]].mean().reset_index()
+        # Summary of min, max, modal
+        with st.expander("📌 Daily Min/Max/Modal Summary"):
+            summary = filtered_df.groupby("arrival_date")[["min_price", "modal_price", "max_price"]].mean().reset_index()
             st.dataframe(summary.set_index("arrival_date"), use_container_width=True)
 
+        # Future price prediction
         st.subheader("🔮 Predict Future Modal Price")
-        model, df_model = train_model(filtered)
+        model, df_model = train_model(filtered_df)
         future_date = st.date_input("Select a future date", value=date.today())
 
         if st.button("Predict Modal Price"):
-            pred_price = predict_price(model, df_model, pd.to_datetime(future_date))
-            st.success(f"📅 Predicted modal price on {future_date.strftime('%d-%b-%Y')}: ₹{pred_price:.2f}")
-
+            pred = predict_price(model, df_model, pd.to_datetime(future_date))
+            st.success(f"📅 Predicted modal price on {future_date.strftime('%d-%b-%Y')}: ₹{pred:.2f}")
     else:
-        st.warning("⚠️ No data found for selected filters.")
+        st.warning("⚠️ No data available for the selected filters.")
 
 except Exception as e:
-    st.error(f"❌ Error loading data or processing: {e}")
+    st.error(f"❌ Error: {e}")
