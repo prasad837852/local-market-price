@@ -1,4 +1,3 @@
-# preprocess.py
 import pandas as pd
 
 def clean_data(df):
@@ -9,7 +8,7 @@ def clean_data(df):
     for col in ['min_price', 'max_price', 'modal_price']:
         if col in df.columns:
             df[col] = pd.to_numeric(df[col], errors='coerce')
-    
+
     # Drop rows where modal price is invalid
     df = df.dropna(subset=['modal_price'])
 
