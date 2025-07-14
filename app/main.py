@@ -6,7 +6,7 @@ from model import train_model, predict_price
 
 DATA_PATH = "dataset/local_prices.csv"
 
-# -------------------- LOGIN SYSTEM --------------------
+# -------------------- LOGIN SYSTEMM --------------------
 
 def login():
     st.set_page_config(page_title="📈 Local Market Price Tracker", layout="centered")
